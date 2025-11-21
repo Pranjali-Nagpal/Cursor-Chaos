@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cursor Chaos: The Worst UI Challenge</title>
+    <style>
+        :root {
+            --bg-color: #09090b;
+            --text-primary: #f4f4f5;
+            --accent-red: #ef4444;
+            --accent-green: #22c55e;
+            --accent-yellow: #eab308;
+            --panel-bg: rgba(24, 24, 27, 0.6);
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none; /* Prevent text selection */
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            cursor: none; /* HIDE REAL MOUSE */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- THE SWARM STYLES --- */
+        .fake-cursor {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 24px;
+            height: 24px;
+            pointer-events: none;
+            z-index: 9999;
+            will-change: transform;
+            /* Default pointer SVG */
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z' fill='black'/%3E%3Cpath d='M13 13l6 6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            transition: transform 0.05s linear; 
+        }
+
+        /* --- UI CONTAINER --- */
+        .game-container {
+            position: relative;
+            z-index: 10;
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            padding: 3rem;
+            border-radius: 1rem;
+            border: 2px solid #3f3f46;
+            text-align: center;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            transition: transform 0.1s;
+        }
+
+        .shake {
+            animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+            border-color: var(--accent-red);
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-8px, 0, 0); }
+            40%, 60% { transform: translate3d(8px, 0, 0); }
+        }
+
+        h1 {
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: #71717a;
+            margin-bottom: 0.5rem;
+        }
+
+        .target-word {
+            font-size: 4rem;
+            font-weight: 900;
+            letter-spacing: 0.1em;
+            margin: 1rem 0;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+        }
+
+        .input-display {
+            width: 100%;
+            background: #000;
+            border: 2px solid #52525b;
+            color: var(--text-primary);
+            font-size: 2.5rem;
+            padding: 1rem;
+            text-align: center;
+            margin-top: 2rem;
+            border-radius: 0.5rem;
+            outline: none;
+            font-family: monospace;
+            text-transform: uppercase;
+            cursor: none;
+        }
+
+        .input-display:focus {
+            border-color: var(--accent-green);
+        }
+
+        .input-display.error {
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .stats {
+            margin-top: 2rem;
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            font-size: 0.9rem;
+            color: #a1a1aa;
+        }
+
+        .stat-value {
+            color: var(--accent-red);
+            font-weight: bold;
+        }
+
+        .hint {
+            font-size: 0.75rem;
+            color: #52525b;
+            margin-top: 1rem;
+        }
+
+        /* Victory Screen */
+        #victory-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        button {
+            margin-top: 2rem;
+            padding: 1rem 2rem;
+            font-size: 1.2rem;
+            background: var(--accent-red);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            font-family: monospace;
+            font-weight: bold;
+            cursor: none; /* Even the button hides the real cursor */
+            transition: transform 0.1s;
+        }
+        
+        button:active {
+            transform: scale(0.95);
+        }
+
+        .bg-decoration {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0.1;
+            background-image: radial-gradient(#333 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg-decoration"></div>
+
+    <!-- Container for all the fake cursors -->
+    <div id="cursor-layer"></div>
+
+    <div class="game-container" id="game-ui">
+        <div id="game-screen">
+            <h1>Target Word</h1>
+            <div class="target-word" id="target-display">LOADING...</div>
+            
+            <!-- Readonly because we hijack the keys manually -->
+            <input type="text" class="input-display" id="player-input" placeholder="TYPE HERE" readonly autofocus>
+            
+            <div class="hint">HINT: To get "AB", you must type "B" then "A".</div>
+
+            <div class="stats">
+                <div>LEVEL: <span id="level-display" style="color: white;">1</span></div>
+                <div>CURSORS: <span id="cursor-count-display" class="stat-value">1</span></div>
+            </div>
+        </div>
+
+        <div id="victory-screen">
+            <div style="font-size: 4rem; color: var(--accent-yellow);">🏆</div>
+            <h2 style="font-size: 2rem; margin: 1rem 0;">CHAOS CONTROLLED</h2>
+            <p>You survived the swarm.</p>
+            <button id="restart-btn">RESTART SYSTEM</button>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        const WORDS = ["BRAIN", "FOCUS", "CHAOS", "REVERSE", "ENTROPY", "MIRROR", "DYSLEXIA"];
+        const MAX_CURSORS = 256; // Browser safety limit
+        
+        // --- STATE ---
+        let currentLevel = 0;
+        let currentInput = "";
+        let mouseX = window.innerWidth / 2;
+        let mouseY = window.innerHeight / 2;
+        
+        // Array of cursor objects: { element: DOMNode, offsetX: number, offsetY: number }
+        let cursors = []; 
+
+        // --- DOM ELEMENTS ---
+        const uiContainer = document.getElementById('game-ui');
+        const cursorLayer = document.getElementById('cursor-layer');
+        const targetDisplay = document.getElementById('target-display');
+        const inputDisplay = document.getElementById('player-input');
+        const levelDisplay = document.getElementById('level-display');
+        const cursorCountDisplay = document.getElementById('cursor-count-display');
+        const gameScreen = document.getElementById('game-screen');
+        const victoryScreen = document.getElementById('victory-screen');
+        const restartBtn = document.getElementById('restart-btn');
+
+        // --- INITIALIZATION ---
+        function initGame() {
+            currentLevel = 0;
+            resetLevel();
+            
+            // Reset Cursors to just 1 (Main Cursor)
+            clearCursors();
+            addCursor(0, 0); // The "Real" visual cursor
+            
+            victoryScreen.style.display = 'none';
+            gameScreen.style.display = 'block';
+            
+            updateUI();
+        }
+
+        function resetLevel() {
+            currentInput = "";
+            inputDisplay.value = "";
+            targetDisplay.textContent = WORDS[currentLevel];
+            inputDisplay.classList.remove('error');
+            uiContainer.classList.remove('shake');
+        }
+
+        // --- CURSOR LOGIC ---
+        
+        function clearCursors() {
+            cursorLayer.innerHTML = '';
+            cursors = [];
+        }
+
+        function addCursor(ox = 0, oy = 0) {
+            const el = document.createElement('div');
+            el.classList.add('fake-cursor');
+            cursorLayer.appendChild(el);
+            
+            cursors.push({
+                element: el,
+                offsetX: ox,
+                offsetY: oy,
+                rotation: (Math.random() - 0.5) * 30 // Random tilt
+            });
+        }
+
+        function multiplyCursors() {
+            // Don't exceed safety limit
+            if (cursors.length >= MAX_CURSORS) return;
+
+            const currentCount = cursors.length;
+            // Double the count
+            for (let i = 0; i < currentCount; i++) {
+                // Create random offsets relative to mouse center
+                // Range: -150px to +150px
+                const dx = (Math.random() - 0.5) * 300;
+                const dy = (Math.random() - 0.5) * 300;
+                addCursor(dx, dy);
+            }
+            updateUI();
+        }
+
+        // Global Mouse Tracking
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            // Update all cursor positions visually
+            // Using requestAnimationFrame would be smoother, but direct update is fine for chaos
+            requestAnimationFrame(renderCursorsPositions);
+        });
+
+        function renderCursorsPositions() {
+            for (let c of cursors) {
+                // Calculate position: Mouse + Offset
+                const x = mouseX + c.offsetX;
+                const y = mouseY + c.offsetY;
+                
+                c.element.style.transform = `translate(${x}px, ${y}px) rotate(${c.rotation}deg)`;
+            }
+        }
+
+        // --- GAMEPLAY LOGIC ---
+
+        // Hijack keyboard
+        document.addEventListener('keydown', (e) => {
+            // Ignore if game over
+            if (victoryScreen.style.display === 'flex') return;
+
+            // Focus input just in case
+            inputDisplay.focus();
+
+            // 1. Handle Backspace
+            if (e.key === 'Backspace') {
+                e.preventDefault();
+                if (currentInput.length > 0) {
+                    // Remove first character (visually the "start" due to reverse logic)
+                    currentInput = currentInput.slice(1); 
+                    inputDisplay.value = currentInput;
+                    
+                    // Check correctness after backspace to possibly remove red error
+                    const targetWord = WORDS[currentLevel];
+                    if (targetWord.endsWith(currentInput)) {
+                        inputDisplay.classList.remove('error');
+                    }
+                }
+                return;
+            }
+
+            // 2. Ignore non-letters (Ctrl, Alt, numbers, etc for now)
+            if (e.key.length > 1 || !/[a-zA-Z]/.test(e.key)) return;
+
+            e.preventDefault();
+
+            const char = e.key.toUpperCase();
+            const targetWord = WORDS[currentLevel];
+
+            // 3. PREDICT THE NEXT STATE
+            // Logic: The Input is prepended.
+            // If screen says "A", and user types "B", screen becomes "BA".
+            const nextInput = char + currentInput;
+            
+            // ALWAYS Update Visuals now
+            currentInput = nextInput;
+            inputDisplay.value = currentInput;
+
+            // 4. VALIDATION
+            // To form "BRAIN", user must type N-I-A-R-B.
+            // We check if the target word ENDS WITH what is currently on screen.
+            
+            if (targetWord.endsWith(nextInput)) {
+                // CORRECT SO FAR
+                inputDisplay.classList.remove('error');
+
+                // CHECK WIN CONDITION
+                if (nextInput === targetWord) {
+                    // Level Complete
+                    setTimeout(() => {
+                        if (currentLevel < WORDS.length - 1) {
+                            currentLevel++;
+                            resetLevel();
+                            updateUI();
+                        } else {
+                            winGame();
+                        }
+                    }, 200);
+                }
+            } else {
+                // WRONG KEY -> PENALTY
+                handleMistake();
+            }
+        });
+
+        function handleMistake() {
+            // Visual feedback
+            uiContainer.classList.remove('shake');
+            void uiContainer.offsetWidth; // Trigger reflow to restart animation
+            uiContainer.classList.add('shake');
+            inputDisplay.classList.add('error');
+
+            // Logic Penalty
+            multiplyCursors();
+        }
+
+        function updateUI() {
+            levelDisplay.textContent = currentLevel + 1;
+            cursorCountDisplay.textContent = cursors.length;
+        }
+
+        function winGame() {
+            gameScreen.style.display = 'none';
+            victoryScreen.style.display = 'flex';
+        }
+
+        // --- EVENT LISTENERS ---
+        
+        // Keep focus on input
+        document.addEventListener('click', () => {
+            inputDisplay.focus();
+            
+            // Restart button logic (since real cursor is hidden, we check coordinates)
+            if (victoryScreen.style.display === 'flex') {
+                // Get button rect
+                const rect = restartBtn.getBoundingClientRect();
+                // Check if main cursor is within rect
+                if (mouseX >= rect.left && mouseX <= rect.right &&
+                    mouseY >= rect.top && mouseY <= rect.bottom) {
+                    initGame();
+                }
+            }
+        });
+
+        // Initialize
+        initGame();
+
+    </script>
+</body>
+</html>
