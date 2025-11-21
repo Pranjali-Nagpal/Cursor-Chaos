@@ -11,7 +11,7 @@
             --accent-red: #ef4444;
             --accent-green: #22c55e;
             --accent-yellow: #eab308;
-            --panel-bg: rgba(24, 24, 27, 0.6);
+            --panel-bg: rgba(24, 24, 27, 0.8);
         }
 
         * {
@@ -120,6 +120,32 @@
             color: var(--accent-red);
         }
 
+        /* SUBMIT BUTTON STYLE */
+        .submit-btn {
+            margin-top: 2rem;
+            padding: 1rem 3rem;
+            font-size: 1.5rem;
+            background: var(--accent-green);
+            color: #000;
+            border: none;
+            border-radius: 0.5rem;
+            font-family: monospace;
+            font-weight: bold;
+            cursor: none;
+            transition: all 0.2s;
+            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+        }
+
+        .submit-btn:hover {
+            background: #4ade80;
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(34, 197, 94, 0.5);
+        }
+
+        .submit-btn:active {
+            transform: scale(0.95);
+        }
+
         .stats {
             margin-top: 2rem;
             display: flex;
@@ -147,7 +173,7 @@
             align-items: center;
         }
 
-        button {
+        .restart-btn {
             margin-top: 2rem;
             padding: 1rem 2rem;
             font-size: 1.2rem;
@@ -157,11 +183,11 @@
             border-radius: 0.5rem;
             font-family: monospace;
             font-weight: bold;
-            cursor: none; /* Even the button hides the real cursor */
+            cursor: none;
             transition: transform 0.1s;
         }
         
-        button:active {
+        .restart-btn:active {
             transform: scale(0.95);
         }
 
@@ -193,7 +219,9 @@
             <!-- Readonly because we hijack the keys manually -->
             <input type="text" class="input-display" id="player-input" placeholder="TYPE HERE" readonly autofocus>
             
-            <div class="hint">HINT: To get "AB", you must type "B" then "A".</div>
+            <button id="action-submit" class="submit-btn">SUBMIT</button>
+
+            <div class="hint">HINT: Type backwards. Find the REAL cursor to click submit.</div>
 
             <div class="stats">
                 <div>LEVEL: <span id="level-display" style="color: white;">1</span></div>
@@ -205,14 +233,14 @@
             <div style="font-size: 4rem; color: var(--accent-yellow);">🏆</div>
             <h2 style="font-size: 2rem; margin: 1rem 0;">CHAOS CONTROLLED</h2>
             <p>You survived the swarm.</p>
-            <button id="restart-btn">RESTART SYSTEM</button>
+            <button id="restart-btn" class="restart-btn">RESTART SYSTEM</button>
         </div>
     </div>
 
     <script>
         // --- CONFIGURATION ---
         const WORDS = ["BRAIN", "FOCUS", "CHAOS", "REVERSE", "ENTROPY", "MIRROR", "DYSLEXIA"];
-        const MAX_CURSORS = 256; // Browser safety limit
+        const MAX_CURSORS = 300; // Limit to prevent total freezing
         
         // --- STATE ---
         let currentLevel = 0;
@@ -233,6 +261,7 @@
         const gameScreen = document.getElementById('game-screen');
         const victoryScreen = document.getElementById('victory-screen');
         const restartBtn = document.getElementById('restart-btn');
+        const submitBtn = document.getElementById('action-submit');
 
         // --- INITIALIZATION ---
         function initGame() {
@@ -282,12 +311,16 @@
             if (cursors.length >= MAX_CURSORS) return;
 
             const currentCount = cursors.length;
+            const viewportW = window.innerWidth;
+            const viewportH = window.innerHeight;
+
             // Double the count
             for (let i = 0; i < currentCount; i++) {
-                // Create random offsets relative to mouse center
-                // Range: -150px to +150px
-                const dx = (Math.random() - 0.5) * 300;
-                const dy = (Math.random() - 0.5) * 300;
+                // SCATTER LOGIC:
+                // Generate random offsets spanning the entire screen + margin
+                // This ensures cursors are far apart and not clustered.
+                const dx = (Math.random() - 0.5) * (viewportW * 2);
+                const dy = (Math.random() - 0.5) * (viewportH * 2);
                 addCursor(dx, dy);
             }
             updateUI();
@@ -299,13 +332,16 @@
             mouseY = e.clientY;
             
             // Update all cursor positions visually
-            // Using requestAnimationFrame would be smoother, but direct update is fine for chaos
             requestAnimationFrame(renderCursorsPositions);
         });
 
         function renderCursorsPositions() {
             for (let c of cursors) {
                 // Calculate position: Mouse + Offset
+                // We use modulo or just let them fly off screen?
+                // Just let them fly relative to mouse. 
+                // If mouse moves left, ALL cursors move left. 
+                // This preserves the "Swarm" feel but spaced out.
                 const x = mouseX + c.offsetX;
                 const y = mouseY + c.offsetY;
                 
@@ -331,7 +367,7 @@
                     currentInput = currentInput.slice(1); 
                     inputDisplay.value = currentInput;
                     
-                    // Check correctness after backspace to possibly remove red error
+                    // Check correctness after backspace
                     const targetWord = WORDS[currentLevel];
                     if (targetWord.endsWith(currentInput)) {
                         inputDisplay.classList.remove('error');
@@ -340,7 +376,7 @@
                 return;
             }
 
-            // 2. Ignore non-letters (Ctrl, Alt, numbers, etc for now)
+            // 2. Ignore non-letters
             if (e.key.length > 1 || !/[a-zA-Z]/.test(e.key)) return;
 
             e.preventDefault();
@@ -349,50 +385,46 @@
             const targetWord = WORDS[currentLevel];
 
             // 3. PREDICT THE NEXT STATE
-            // Logic: The Input is prepended.
-            // If screen says "A", and user types "B", screen becomes "BA".
             const nextInput = char + currentInput;
             
-            // ALWAYS Update Visuals now
+            // Update Visuals
             currentInput = nextInput;
             inputDisplay.value = currentInput;
 
-            // 4. VALIDATION
-            // To form "BRAIN", user must type N-I-A-R-B.
-            // We check if the target word ENDS WITH what is currently on screen.
-            
+            // 4. VALIDATION (Instant Penalty Check)
             if (targetWord.endsWith(nextInput)) {
-                // CORRECT SO FAR
+                // Correct so far
                 inputDisplay.classList.remove('error');
-
-                // CHECK WIN CONDITION
-                if (nextInput === targetWord) {
-                    // Level Complete
-                    setTimeout(() => {
-                        if (currentLevel < WORDS.length - 1) {
-                            currentLevel++;
-                            resetLevel();
-                            updateUI();
-                        } else {
-                            winGame();
-                        }
-                    }, 200);
-                }
+                // Note: We NO LONGER auto-win here. User must click submit.
             } else {
-                // WRONG KEY -> PENALTY
+                // Wrong key -> Penalty
                 handleMistake();
             }
         });
 
         function handleMistake() {
-            // Visual feedback
             uiContainer.classList.remove('shake');
-            void uiContainer.offsetWidth; // Trigger reflow to restart animation
+            void uiContainer.offsetWidth; 
             uiContainer.classList.add('shake');
             inputDisplay.classList.add('error');
-
-            // Logic Penalty
             multiplyCursors();
+        }
+
+        function checkWin() {
+            const targetWord = WORDS[currentLevel];
+            if (currentInput === targetWord) {
+                // Level Complete
+                if (currentLevel < WORDS.length - 1) {
+                    currentLevel++;
+                    resetLevel();
+                    updateUI();
+                } else {
+                    winGame();
+                }
+            } else {
+                // They clicked submit with wrong word -> PENALTY
+                handleMistake();
+            }
         }
 
         function updateUI() {
@@ -405,22 +437,24 @@
             victoryScreen.style.display = 'flex';
         }
 
-        // --- EVENT LISTENERS ---
+        // --- CLICK HANDLERS ---
         
-        // Keep focus on input
+        // The submit button logic
+        submitBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Stop it from bubbling to the document click
+            checkWin();
+        });
+
+        restartBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            initGame();
+        });
+
+        // Keep focus on input if clicking background
         document.addEventListener('click', () => {
+            // We only refocus if not clicking a button
+            // But since the buttons have stopPropagation, this runs on background clicks
             inputDisplay.focus();
-            
-            // Restart button logic (since real cursor is hidden, we check coordinates)
-            if (victoryScreen.style.display === 'flex') {
-                // Get button rect
-                const rect = restartBtn.getBoundingClientRect();
-                // Check if main cursor is within rect
-                if (mouseX >= rect.left && mouseX <= rect.right &&
-                    mouseY >= rect.top && mouseY <= rect.bottom) {
-                    initGame();
-                }
-            }
         });
 
         // Initialize
